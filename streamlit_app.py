@@ -87,7 +87,7 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
     # Replace None/NaN values with a consistent string to avoid comparison
     # errors when grouping.
     if "car_ownership" in df.columns:
-        df["car_ownership"] = df["car_ownership"].fillna("None")
+                df["car_ownership"] = df["car_ownership"].fillna("None").astype(str)
 
     grouped = (
         df.groupby("household_id").agg(
