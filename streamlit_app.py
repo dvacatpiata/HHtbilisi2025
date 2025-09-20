@@ -77,11 +77,15 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
         total trips, number of persons, income, car ownership and
         trips per person.
     """
-    grouped = df.groupby("household_id").agg(
-        trips_total=("trip_id", "count"),
+       df = df.copy()
+    if "car_ownership" in df.columns:
+        df["car_ownership"] = df["car_ownership"].fillna("None").astype(str)
+ 
+   grouped = df.groupby("household_id").agg(
+             trips_total=("trip_id", "count"),
         persons=("num_persons", "max"),
         income=("household_income", "max"),
-        car_ownership=("car_ownership", "max"),
+        car_ownership=("car_ownership", "first"),
     ).reset_index()
     grouped["trips_per_person"] = grouped["trips_total"] / grouped["persons"]
     return grouped
