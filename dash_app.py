@@ -96,6 +96,8 @@ deploy this to an online environment, adjust the host and port
 arguments accordingly.
 """
 
+import os
+
 import dash
 from dash import dcc, html, Input, Output, callback_context
 import dash_bootstrap_components as dbc
@@ -421,4 +423,6 @@ def update_charts(selected_purposes, age_range, selected_sexes):
 
 if __name__ == "__main__":
     # Run the Dash app
-    app.run_server(debug=True)
+        port = int(os.environ.get("PORT", 8050))
+    app.run_server(host="0.0.0.0", port=port, debug=False)
+
