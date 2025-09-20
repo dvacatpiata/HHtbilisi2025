@@ -77,17 +77,32 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
         total trips, number of persons, income, car ownership and
         trips per person.
     """
-       df = df.copy()
+    # Before grouping, ensure that the car_ownership column contains only strings.
+    # In the sample data, car_ownership values may include None, which cannot
+    # be compared with strings when taking the maximum. This leads to a
+    # TypeError when using the "max" aggregation. To avoid this, first
+    # fill missing values with a placeholder string and then use an
+    # aggregation function that simply returns the first non-null value.
+    df = df.copy()
+    # Replace None/NaN values with a consistent string to avoid comparison
+    # errors when grouping.
     if "car_ownership" in df.columns:
-        df["car_ownership"] = df["car_ownership"].fillna("None").astype(str)
- 
-   grouped = df.groupby("household_id").agg(
-             trips_total=("trip_id", "count"),
-        persons=("num_persons", "max"),
-        income=("household_income", "max"),
-        car_ownership=("car_ownership", "first"),
-    ).reset_index()
-    grouped["trips_per_person"] = grouped["trips_total"] / grouped["persons"]
+        df["car_ownership"] = df["car_ownership"].fillna("None")
+
+    grouped = (
+        df.groupby("household_id").agg(
+            trips_total=("trip_id", "count"),
+            persons=("num_persons", "max"),
+            income=("household_income", "max"),
+            # Use 'first' instead of 'max' for car_ownership to avoid
+            # comparisons between strings and NoneTypes. Since we filled
+            # missing values, 'first' will return a representative value.
+            car_ownership=("car_ownership", "first"),
+        )
+        .reset_index()
+    )
+    # Calculate trips per person; guard against division by zero
+    grouped["trips_per_person"] = grouped["trips_total"] / grouped["persons"].replace({0: np.nan})
     return grouped
 
 
@@ -102,6 +117,7 @@ def compute_correlation(df: pd.DataFrame) -> pd.DataFrame:
     ]
     corr = df[numeric_cols].corr()
     return corr
+
 
 
 def main() -> None:
