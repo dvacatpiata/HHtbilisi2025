@@ -90,6 +90,16 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
         # Convert to string so aggregation functions (like 'first') work on non-ordered data
         df["car_ownership"] = df["car_ownership"].fillna("None").astype(str)
 
+    # Ensure household-level numeric fields are truly numeric. In some
+    # datasets these columns may be read as object or categorical due to
+    # missing values or unexpected strings. Converting them to numeric
+    # prevents groupby aggregations (e.g. "max") from failing on
+    # non‑ordered categorical data. Invalid values will be coerced to NaN
+    # and ignored by the aggregation operations.
+    for col in ["num_persons", "household_income"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
     grouped = (
         df.groupby("household_id").agg(
             trips_total=("trip_id", "count"),
