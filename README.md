@@ -104,6 +104,15 @@ business trips compared with shorter shopping trips by females【846367172183715
 
 Best‑practice recommendations for interactive dashboards also guided
 the design.  Only the most relevant filters are exposed and they are
+
+
+## Live app
+
+The dashboard is deployed on Render and can be accessed at the following link:
+
+[https://hhtbilisi2025.onrender.com](https://hhtbilisi2025.onrender.com)
+
+Please note that the free Render instance will spin down after periods of inactivity, which may lead to a delay of about a minute when starting up.
 clearly labelled to reduce cognitive load【172438693224181†L420-L427】.  When users
 select values, all visualisations update together to provide coherent
 feedback【172438693224181†L465-L473】.  Filters are positioned at the top of the
