@@ -87,8 +87,14 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
     # Replace None/NaN values with a consistent string to avoid comparison
     # errors when grouping.
     if "car_ownership" in df.columns:
-        # Convert to string so aggregation functions (like 'first') work on non-ordered data
-        df["car_ownership"] = df["car_ownership"].fillna("None").astype(str)
+        # Convert categorical car_ownership values to strings before filling missing values.
+        # Using fillna on a Categorical column with a new value raises an error, so we cast
+        # to object/str first and then replace missing entries.  Pandas converts NaN to the
+        # string "nan" when casting to str, so replace that sentinel with a consistent
+        # placeholder value ("None").  This ensures the aggregation below operates on
+        # standard Python strings without introducing new categories.
+        df["car_ownership"] = df["car_ownership"].astype(str)
+        df["car_ownership"] = df["car_ownership"].replace("nan", "None")
 
     # Ensure household-level numeric fields are truly numeric. In some
     # datasets these columns may be read as object or categorical due to
