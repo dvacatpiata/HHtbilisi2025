@@ -111,7 +111,10 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
 def compute_correlation(df: pd.DataFrame) -> pd.DataFrame:
     """Compute the correlation matrix for selected numeric variables.
 
-    Only numeric columns relevant for mobility analysis are included.
+    Age is excluded from the numeric correlation because it is stored
+    as a categorical range (e.g. "36-45 years") in the full survey
+    dataset.  Including it would coerce categories to arbitrary
+    ordinal codes and yield misleading results.
 
     Parameters
     ----------
@@ -124,7 +127,6 @@ def compute_correlation(df: pd.DataFrame) -> pd.DataFrame:
         Correlation matrix as a DataFrame.
     """
     numeric_cols = [
-        "age",
         "distance_km",
         "duration_min",
         "household_income",
@@ -279,10 +281,12 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
     fig_purpose.update_layout(showlegend=False, xaxis_tickangle=-45)
 
     # Trips by age histogram
+    # Histogram of age categories.  We omit `nbins` because age is
+    # categorical and Plotly will automatically create a bar for each
+    # distinct category.
     fig_age = px.histogram(
         df_filtered,
         x="age",
-        nbins=20,
         labels={"age": "Age", "count": "Number of trips"},
         title="Trips by Age",
         color_discrete_sequence=["#2ca02c"],
@@ -292,9 +296,13 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
     # Correlation matrix heatmap
     if not df_filtered.empty:
         corr = compute_correlation(df_filtered)
+        # Build the correlation heatmap without the `text_auto` keyword.
+        # Some older Plotly versions do not support this argument and
+        # will throw an error, preventing the chart from rendering.  By
+        # omitting `text_auto` we ensure compatibility across
+        # environments.
         fig_corr = px.imshow(
             corr,
-            text_auto=True,
             color_continuous_scale="RdBu",
             zmin=-1,
             zmax=1,
@@ -302,11 +310,13 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
             title="Correlation Matrix (Selected Data)",
         )
     else:
-        # Empty heatmap placeholder
+        # Empty heatmap placeholder with the numeric columns used in
+        # compute_correlation (age is excluded because it is categorical)
+        placeholder_cols = ["distance_km", "duration_min", "household_income"]
         fig_corr = px.imshow(
-            np.zeros((4, 4)),
-            x=["age", "distance_km", "duration_min", "household_income"],
-            y=["age", "distance_km", "duration_min", "household_income"],
+            np.zeros((len(placeholder_cols), len(placeholder_cols))),
+            x=placeholder_cols,
+            y=placeholder_cols,
             color_continuous_scale="RdBu",
             title="Correlation Matrix (No data)"
         )
@@ -324,7 +334,7 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
         hh_filtered["trips_per_person"] = hh_filtered["trips_total"] / hh_filtered["persons"]
         hh_df = hh_filtered
 
-    fig_household = px.scatter(
+        fig_household = px.scatter(
         hh_df,
         x="income",
         y="trips_per_person",
@@ -337,7 +347,11 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
             "persons": "Household Size",
         },
         title="Household Metrics",
-        hover_data=["trips_total" if "trips_total" in hh_df.columns else "trips_total"],
+        # Only include ``trips_total`` in the hover data when it exists in
+        # the household summary.  Passing ``None`` when the column is
+        # absent prevents Plotly from raising an error about an unknown
+        # variable.
+        hover_data=["trips_total"] if "trips_total" in hh_df.columns else None,
     )
     fig_household.update_layout(legend_title="Car Ownership")
 

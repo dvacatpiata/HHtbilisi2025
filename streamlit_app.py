@@ -87,13 +87,20 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data
 def compute_correlation(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute the correlation matrix for selected numeric variables."""
+    """Compute the correlation matrix for selected numeric variables.
+
+    Age is excluded from the numeric correlation because in the full survey
+    dataset it is a categorical range (e.g. "36-45 years").  Including
+    it would coerce categories to arbitrary codes and yield misleading
+    results.  Instead we focus on the truly numeric fields.
+    """
     numeric_cols = [
-        "age",
         "distance_km",
         "duration_min",
         "household_income",
     ]
+    # Only compute correlation on the available numeric columns to avoid
+    # accidental inclusion of non-numeric categories
     return df[numeric_cols].corr()
 
 
@@ -175,10 +182,12 @@ def main() -> None:
         st.plotly_chart(fig_purpose, use_container_width=True)
 
     with col2:
+        # Histogram of age categories.  We omit `nbins` because age is
+        # categorical and Plotly will automatically produce a bar for each
+        # distinct category.
         fig_age = px.histogram(
             df_filtered,
             x="age",
-            nbins=20,
             labels={"age": "Age", "count": "Number of trips"},
             title="Trips by Age",
             color_discrete_sequence=["#2ca02c"],
@@ -191,9 +200,14 @@ def main() -> None:
     with col3:
         if not df_filtered.empty:
             corr_df = compute_correlation(df_filtered)
-            fig_corr = px.imshow(
+        # Build the correlation heatmap without the `text_auto` argument.  Some
+        # older Plotly versions (used in certain deployment environments)
+        # do not support the `text_auto` keyword and will raise an error,
+        # causing the entire dashboard to fail to render.  Instead of
+        # relying on Plotly to draw text automatically, we omit the
+        # parameter and allow the heatmap to render with colour only.
+        fig_corr = px.imshow(
                 corr_df,
-                text_auto=True,
                 color_continuous_scale="RdBu",
                 zmin=-1,
                 zmax=1,
@@ -201,10 +215,14 @@ def main() -> None:
                 title="Correlation Matrix (Selected Data)",
             )
         else:
+            # Create a placeholder correlation heatmap with the same numeric
+            # columns used in compute_correlation.  We exclude 'age' because
+            # it is categorical and not part of the numeric correlation.
+            placeholder_cols = ["distance_km", "duration_min", "household_income"]
             fig_corr = px.imshow(
-                np.zeros((4, 4)),
-                x=["age", "distance_km", "duration_min", "household_income"],
-                y=["age", "distance_km", "duration_min", "household_income"],
+                np.zeros((len(placeholder_cols), len(placeholder_cols))),
+                x=placeholder_cols,
+                y=placeholder_cols,
                 color_continuous_scale="RdBu",
                 title="Correlation Matrix (No data)"
             )
