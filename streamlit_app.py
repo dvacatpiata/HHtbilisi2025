@@ -54,6 +54,9 @@ def load_data(path: str) -> pd.DataFrame:
         "sex",
         "employment",
         "car_ownership",
+        # Treat 'age' as a categorical variable because the full dataset uses ranges like
+        # '36-45 years' and '66 and more' rather than numeric ages.
+        "age",
     ]
     for col in cat_cols:
         if col in df.columns:
@@ -118,11 +121,15 @@ def main() -> None:
         help="Select one or more purposes to filter trips. Leave empty to include all."
     )
 
-    # Age slider: uses a tuple for range
-    min_age, max_age = int(data["age"].min()), int(data["age"].max())
-    age_range = st.sidebar.slider(
-        "Age Range", min_value=min_age, max_value=max_age,
-        value=(min_age, max_age), step=1
+    # Age filter: use categorical age ranges instead of numeric slider
+    # The 'age' column in the full survey dataset contains categories like
+    # "36-45 years" or "66 and more" rather than numeric values.  A numeric
+    # slider will fail when attempting to cast these strings to integers.
+    # Instead, present a multiselect to choose one or more age categories.
+    available_ages = sorted(data["age"].astype(str).unique().tolist())
+    selected_ages = st.sidebar.multiselect(
+        "Age Categories", options=available_ages, default=available_ages,
+        help="Select one or more age categories to filter trips."
     )
 
     selected_sexes = st.sidebar.multiselect(
@@ -137,10 +144,8 @@ def main() -> None:
     df_filtered = data.copy()
     if selected_purposes:
         df_filtered = df_filtered[df_filtered["purpose"].isin(selected_purposes)]
-    if age_range:
-        df_filtered = df_filtered[
-            (df_filtered["age"] >= age_range[0]) & (df_filtered["age"] <= age_range[1])
-        ]
+    if selected_ages:
+        df_filtered = df_filtered[df_filtered["age"].isin(selected_ages)]
     if selected_sexes:
         df_filtered = df_filtered[df_filtered["sex"].isin(selected_sexes)]
 

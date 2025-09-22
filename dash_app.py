@@ -61,12 +61,19 @@ def load_data(path: str) -> pd.DataFrame:
     """
     df = pd.read_csv(path)
     # Convert categorical columns to category dtype for efficiency
+    # Include age as a categorical column.  In the full survey dataset
+    # age values are strings like "36-45 years" rather than numeric
+    # integers.  Converting to a pandas Categorical type ensures that
+    # downstream operations (e.g., filtering and grouping) treat age
+    # values as discrete categories rather than attempting numeric
+    # comparisons.
     cat_cols = [
         "purpose",
         "mode",
         "sex",
         "employment",
         "car_ownership",
+        "age",
     ]
     for col in cat_cols:
         if col in df.columns:
@@ -148,6 +155,11 @@ app.title = "Mobility Dashboard"
 available_purposes = sorted(data["purpose"].cat.categories.tolist())
 available_modes = sorted(data["mode"].cat.categories.tolist())
 available_sexes = sorted(data["sex"].cat.categories.tolist())
+# Extract the unique age categories as strings for the age filter.  We
+# cannot treat age as numeric because the full survey encodes age in
+# ranges (e.g. "36-45 years", "66 and more").  Using strings here
+# allows us to populate a drop-down for multi-select filtering.
+available_ages = sorted(data["age"].astype(str).unique().tolist())
 
 
 def create_layout() -> html.Div:
@@ -169,14 +181,13 @@ def create_layout() -> html.Div:
                 ),
             ], md=4),
             dbc.Col([
-                html.Label("Age Range", className="form-label"),
-                dcc.RangeSlider(
-                    id="age-slider",
-                    min=int(data["age"].min()),
-                    max=int(data["age"].max()),
-                    value=[int(data["age"].min()), int(data["age"].max())],
-                    marks={i: str(i) for i in range(0, int(data["age"].max()) + 1, 10)},
-                    tooltip={"always_visible": False, "placement": "bottom"},
+                html.Label("Age Categories", className="form-label"),
+                dcc.Dropdown(
+                    id="age-filter",
+                    options=[{"label": a, "value": a} for a in available_ages],
+                    value=[],  # no default selection; empty means all ages
+                    multi=True,
+                    placeholder="Select age category(ies)",
                 ),
             ], md=4),
             dbc.Col([
@@ -230,18 +241,21 @@ app.layout = create_layout()
     Output("trips-by-employment", "figure"),
     Output("duration-vs-distance", "figure"),
     Input("purpose-filter", "value"),
-    Input("age-slider", "value"),
+    # Use the age-filter dropdown instead of the numeric range slider.  This
+    # receives a list of selected age categories (empty list means no filter).
+    Input("age-filter", "value"),
     Input("sex-filter", "value"),
 )
-def update_charts(selected_purposes, age_range, selected_sexes):
+def update_charts(selected_purposes, selected_ages, selected_sexes):
     # Filter data by purpose, age and sex
     df_filtered = data.copy()
     # Purpose filter
     if selected_purposes:
         df_filtered = df_filtered[df_filtered["purpose"].isin(selected_purposes)]
-    # Age range filter
-    if age_range:
-        df_filtered = df_filtered[(df_filtered["age"] >= age_range[0]) & (df_filtered["age"] <= age_range[1])]
+    # Age category filter.  When one or more age categories are selected
+    # filter by inclusion; if no categories are selected, retain all ages.
+    if selected_ages:
+        df_filtered = df_filtered[df_filtered["age"].isin(selected_ages)]
     # Sex filter
     if selected_sexes:
         df_filtered = df_filtered[df_filtered["sex"].isin(selected_sexes)]
