@@ -41,6 +41,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 
@@ -176,7 +177,7 @@ def main() -> None:
             labels={"purpose": "Trip purpose", "count": "Number of trips"},
             title="Trips by Purpose",
             color="purpose",
-            color_discrete_sequence=px.colors.qualitative.Set2,
+            # Do not set a specific colour sequence. Let Plotly assign colours for maximum compatibility.
         )
         fig_purpose.update_layout(showlegend=False, xaxis_tickangle=-45)
         st.plotly_chart(fig_purpose, use_container_width=True)
@@ -190,7 +191,7 @@ def main() -> None:
             x="age",
             labels={"age": "Age", "count": "Number of trips"},
             title="Trips by Age",
-            color_discrete_sequence=["#2ca02c"],
+            # Let Plotly choose the colour palette automatically.
         )
         fig_age.update_layout(bargap=0.1)
         st.plotly_chart(fig_age, use_container_width=True)
@@ -199,32 +200,41 @@ def main() -> None:
     col3, col4 = st.columns(2)
     with col3:
         if not df_filtered.empty:
+            # Compute the correlation matrix on the filtered data.  We build
+            # the heatmap using graph_objects instead of px.imshow to maximise
+            # compatibility with older Plotly versions where px.imshow may not
+            # be available.  Axis labels are explicitly provided and a
+            # colourbar is added.
             corr_df = compute_correlation(df_filtered)
-        # Build the correlation heatmap without the `text_auto` argument.  Some
-        # older Plotly versions (used in certain deployment environments)
-        # do not support the `text_auto` keyword and will raise an error,
-        # causing the entire dashboard to fail to render.  Instead of
-        # relying on Plotly to draw text automatically, we omit the
-        # parameter and allow the heatmap to render with colour only.
-        fig_corr = px.imshow(
-                corr_df,
-                color_continuous_scale="RdBu",
+            fig_corr = go.Figure(data=go.Heatmap(
+                z=corr_df.values,
+                x=corr_df.columns.tolist(),
+                y=corr_df.index.tolist(),
+                colorscale="RdBu",
                 zmin=-1,
                 zmax=1,
-                labels=dict(x="Variable", y="Variable", color="Correlation"),
+                colorbar=dict(title="Correlation"),
+            ))
+            fig_corr.update_layout(
                 title="Correlation Matrix (Selected Data)",
+                xaxis_title="Variable",
+                yaxis_title="Variable",
             )
         else:
-            # Create a placeholder correlation heatmap with the same numeric
-            # columns used in compute_correlation.  We exclude 'age' because
-            # it is categorical and not part of the numeric correlation.
+            # If no data matches the filters, show an empty correlation heatmap
+            # for the numeric columns used in the correlation.  Age is
+            # excluded because it is a categorical variable.
             placeholder_cols = ["distance_km", "duration_min", "household_income"]
-            fig_corr = px.imshow(
-                np.zeros((len(placeholder_cols), len(placeholder_cols))),
+            fig_corr = go.Figure(data=go.Heatmap(
+                z=np.zeros((len(placeholder_cols), len(placeholder_cols))),
                 x=placeholder_cols,
                 y=placeholder_cols,
-                color_continuous_scale="RdBu",
-                title="Correlation Matrix (No data)"
+                colorscale="RdBu",
+            ))
+            fig_corr.update_layout(
+                title="Correlation Matrix (No data)",
+                xaxis_title="Variable",
+                yaxis_title="Variable",
             )
         st.plotly_chart(fig_corr, use_container_width=True)
 
@@ -261,7 +271,7 @@ def main() -> None:
             names="mode",
             values="count",
             title="Trip Mode Distribution",
-            color_discrete_sequence=px.colors.qualitative.Pastel,
+            # Do not set a colour sequence; use default palette for compatibility.
         )
         st.plotly_chart(fig_mode, use_container_width=True)
 
@@ -275,7 +285,7 @@ def main() -> None:
                 labels={"mode": "Mode", "duration_min": "Duration (min)"},
                 title="Trip Duration by Mode",
                 color="mode",
-                color_discrete_sequence=px.colors.qualitative.Set3,
+                # Use default colours; avoid specifying a discrete colour sequence.
             )
             fig_duration.update_layout(showlegend=False)
             st.plotly_chart(fig_duration, use_container_width=True)
@@ -298,7 +308,7 @@ def main() -> None:
             labels={"employment": "Employment status", "count": "Number of trips"},
             title="Trips by Employment Status",
             color="employment",
-            color_discrete_sequence=px.colors.qualitative.Set1,
+            # Avoid specifying a colour sequence; rely on default palette.
         )
         fig_employment.update_layout(showlegend=False, xaxis_tickangle=-45)
         st.plotly_chart(fig_employment, use_container_width=True)

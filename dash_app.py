@@ -40,6 +40,7 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 
 # -----------------------------------------------------------------------------
 # Data loading and preparation
@@ -276,7 +277,7 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
         labels={"purpose": "Trip purpose", "count": "Number of trips"},
         title="Trips by Purpose",
         color="purpose",
-        color_discrete_sequence=px.colors.qualitative.Set2,
+        # Use default colours; omit explicit qualitative palette.
     )
     fig_purpose.update_layout(showlegend=False, xaxis_tickangle=-45)
 
@@ -289,36 +290,45 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
         x="age",
         labels={"age": "Age", "count": "Number of trips"},
         title="Trips by Age",
-        color_discrete_sequence=["#2ca02c"],
+        # Do not specify a custom colour sequence for categorical ages; allow Plotly to
+        # assign default colours automatically.  Explicit colour lists can
+        # sometimes cause errors when the number of categories exceeds
+        # the number of colours in the sequence.
     )
     fig_age.update_layout(bargap=0.1)
 
     # Correlation matrix heatmap
     if not df_filtered.empty:
         corr = compute_correlation(df_filtered)
-        # Build the correlation heatmap without the `text_auto` keyword.
-        # Some older Plotly versions do not support this argument and
-        # will throw an error, preventing the chart from rendering.  By
-        # omitting `text_auto` we ensure compatibility across
-        # environments.
-        fig_corr = px.imshow(
-            corr,
-            color_continuous_scale="RdBu",
+        # Build the heatmap using graph_objects for maximum compatibility.
+        fig_corr = go.Figure(data=go.Heatmap(
+            z=corr.values,
+            x=corr.columns.tolist(),
+            y=corr.index.tolist(),
+            colorscale="RdBu",
             zmin=-1,
             zmax=1,
-            labels=dict(x="Variable", y="Variable", color="Correlation"),
+            colorbar=dict(title="Correlation"),
+        ))
+        fig_corr.update_layout(
             title="Correlation Matrix (Selected Data)",
+            xaxis_title="Variable",
+            yaxis_title="Variable",
         )
     else:
         # Empty heatmap placeholder with the numeric columns used in
         # compute_correlation (age is excluded because it is categorical)
         placeholder_cols = ["distance_km", "duration_min", "household_income"]
-        fig_corr = px.imshow(
-            np.zeros((len(placeholder_cols), len(placeholder_cols))),
+        fig_corr = go.Figure(data=go.Heatmap(
+            z=np.zeros((len(placeholder_cols), len(placeholder_cols))),
             x=placeholder_cols,
             y=placeholder_cols,
-            color_continuous_scale="RdBu",
-            title="Correlation Matrix (No data)"
+            colorscale="RdBu",
+        ))
+        fig_corr.update_layout(
+            title="Correlation Matrix (No data)",
+            xaxis_title="Variable",
+            yaxis_title="Variable",
         )
 
     # Household metrics scatter: average trips per person vs income
@@ -367,7 +377,7 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
         names="mode",
         values="count",
         title="Trip Mode Distribution",
-        color_discrete_sequence=px.colors.qualitative.Pastel,
+        # Rely on default colour cycle; avoid specifying a qualitative palette.
     )
 
     # Duration by mode box plot
@@ -378,7 +388,7 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
         labels={"mode": "Mode", "duration_min": "Duration (min)"},
         title="Trip Duration by Mode",
         color="mode",
-        color_discrete_sequence=px.colors.qualitative.Set3,
+        # Use default colours; omit explicit colour sequence.
     )
     fig_duration_mode.update_layout(showlegend=False)
 
@@ -396,7 +406,7 @@ def update_charts(selected_purposes, selected_ages, selected_sexes):
         labels={"employment": "Employment status", "count": "Number of trips"},
         title="Trips by Employment Status",
         color="employment",
-        color_discrete_sequence=px.colors.qualitative.Set1,
+        # Default colour palette; no specific sequence set.
     )
     fig_employment.update_layout(showlegend=False, xaxis_tickangle=-45)
 
