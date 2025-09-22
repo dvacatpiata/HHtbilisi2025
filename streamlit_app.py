@@ -1,27 +1,39 @@
 """
-Streamlit Mobility Dashboard for HHtbilisi2025
-============================================
+Enhanced Streamlit Mobility Dashboard for HHtbilisi2025
+=======================================================
 
-This Streamlit application mirrors the functionality of the original
-Dash‑based dashboard using Streamlit widgets and Plotly charts.  It
-provides an interactive environment for exploring household travel
-survey data.  Users can filter trips by purpose, age range and sex
-and observe how these selections influence a variety of metrics and
-visualisations.  The layout is organised into a sidebar for filter
-controls and a main area with responsive charts.
+This Streamlit application mirrors the enhanced Dash dashboard.  It
+loads the full household travel survey dataset from
+``sample_data_full.csv`` and offers the following interactive
+visualisations:
 
-To run the app locally install the required packages from
-``requirements.txt`` and then execute:
+* **Trips by Purpose** – bar chart summarising the number of trips
+  for each purpose category.
+* **Trips by Age** – histogram of trip counts across age groups.
+* **Correlation Matrix** – heatmap showing correlations between
+  numeric variables (age, estimated distance, trip duration and
+  household income).
+* **Household Metrics** – scatter plot of trips per person versus
+  household income with marker size encoding household size and colour
+  indicating car ownership.
+* **Mode Distribution** – pie chart of transport modes.
+* **Duration by Mode** – box plot of trip durations grouped by mode.
+* **Trips by Employment Status** – bar chart showing trip counts for
+  each employment category.
+* **Duration vs Distance** – scatter plot comparing duration and
+  estimated distance with points coloured by trip purpose.
+
+Filters in the sidebar allow users to select trip purpose(s), a range
+of ages and sex categories.  All charts update accordingly.  The
+sidebar also displays the number of records in the loaded dataset so
+you can verify that the full survey is being used.
+
+To run this app locally install the required packages and execute:
 
 .. code-block:: bash
 
-   streamlit run streamlit_app.py
-
-The app will start on a local port (typically http://localhost:8501/).
-
-When deploying to Streamlit Cloud, point the app configuration at
-``streamlit_app.py`` and ensure that the sample data CSV file
-``sample_data.csv`` is present in the repository.
+    pip install streamlit pandas plotly
+    streamlit run streamlit_app.py
 """
 
 from __future__ import annotations
@@ -34,19 +46,7 @@ import streamlit as st
 
 @st.cache_data
 def load_data(path: str) -> pd.DataFrame:
-    """Load trip data from a CSV file and cast categorical columns.
-
-    Parameters
-    ----------
-    path: str
-        Path to the CSV file.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame containing the trips and associated person and
-        household attributes.
-    """
+    """Load trip data from a CSV file and cast categorical columns."""
     df = pd.read_csv(path)
     cat_cols = [
         "purpose",
@@ -63,62 +63,21 @@ def load_data(path: str) -> pd.DataFrame:
 
 @st.cache_data
 def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate trip data to a household level summary.
-
-    Parameters
-    ----------
-    df: pd.DataFrame
-        Trip level data.
-
-    Returns
-    -------
-    pd.DataFrame
-        Aggregated DataFrame with one row per household containing
-        total trips, number of persons, income, car ownership and
-        trips per person.
-    """
-    # Before grouping, ensure that the car_ownership column contains only strings.
-    # In the sample data, car_ownership values may include None, which cannot
-    # be compared with strings when taking the maximum. This leads to a
-    # TypeError when using the "max" aggregation. To avoid this, first
-    # fill missing values with a placeholder string and then use an
-    # aggregation function that simply returns the first non-null value.
+    """Aggregate trip data to a household level summary."""
     df = df.copy()
-    # Replace None/NaN values with a consistent string to avoid comparison
-    # errors when grouping.
-    if "car_ownership" in df.columns:
-        # Convert categorical car_ownership values to strings before filling missing values.
-        # Using fillna on a Categorical column with a new value raises an error, so we cast
-        # to object/str first and then replace missing entries.  Pandas converts NaN to the
-        # string "nan" when casting to str, so replace that sentinel with a consistent
-        # placeholder value ("None").  This ensures the aggregation below operates on
-        # standard Python strings without introducing new categories.
-        df["car_ownership"] = df["car_ownership"].astype(str)
-        df["car_ownership"] = df["car_ownership"].replace("nan", "None")
-
-    # Ensure household-level numeric fields are truly numeric. In some
-    # datasets these columns may be read as object or categorical due to
-    # missing values or unexpected strings. Converting them to numeric
-    # prevents groupby aggregations (e.g. "max") from failing on
-    # non‑ordered categorical data. Invalid values will be coerced to NaN
-    # and ignored by the aggregation operations.
+    # Ensure household-level numeric fields are numeric
     for col in ["num_persons", "household_income"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-
     grouped = (
         df.groupby("household_id").agg(
             trips_total=("trip_id", "count"),
             persons=("num_persons", "max"),
             income=("household_income", "max"),
-            # Use 'first' instead of 'max' for car_ownership to avoid
-            # comparisons between strings and NoneTypes. Since we filled
-            # missing values, 'first' will return a representative value.
             car_ownership=("car_ownership", "first"),
         )
         .reset_index()
     )
-    # Calculate trips per person; guard against division by zero
     grouped["trips_per_person"] = grouped["trips_total"] / grouped["persons"].replace({0: np.nan})
     return grouped
 
@@ -132,8 +91,7 @@ def compute_correlation(df: pd.DataFrame) -> pd.DataFrame:
         "duration_min",
         "household_income",
     ]
-    corr = df[numeric_cols].corr()
-    return corr
+    return df[numeric_cols].corr()
 
 
 def main() -> None:
@@ -142,7 +100,7 @@ def main() -> None:
     st.title("Household Travel Survey Dashboard")
 
     # Load data
-    DATA_PATH = "sample_data.csv"
+    DATA_PATH = "sample_data_full.csv"
     try:
         data = load_data(DATA_PATH)
     except FileNotFoundError:
@@ -238,7 +196,6 @@ def main() -> None:
                 title="Correlation Matrix (Selected Data)",
             )
         else:
-            # Display empty heatmap when no data matches the filters
             fig_corr = px.imshow(
                 np.zeros((4, 4)),
                 x=["age", "distance_km", "duration_min", "household_income"],
@@ -301,6 +258,42 @@ def main() -> None:
             st.plotly_chart(fig_duration, use_container_width=True)
         else:
             st.write("No trip data available to display duration by mode.")
+
+    # Row 4: Trips by employment and duration vs distance
+    col7, col8 = st.columns(2)
+    with col7:
+        employment_counts = (
+            df_filtered.groupby("employment")
+            .size()
+            .reset_index(name="count")
+            .sort_values("count", ascending=False)
+        )
+        fig_employment = px.bar(
+            employment_counts,
+            x="employment",
+            y="count",
+            labels={"employment": "Employment status", "count": "Number of trips"},
+            title="Trips by Employment Status",
+            color="employment",
+            color_discrete_sequence=px.colors.qualitative.Set1,
+        )
+        fig_employment.update_layout(showlegend=False, xaxis_tickangle=-45)
+        st.plotly_chart(fig_employment, use_container_width=True)
+
+    with col8:
+        if not df_filtered.empty:
+            fig_dur_dist = px.scatter(
+                df_filtered,
+                x="distance_km",
+                y="duration_min",
+                color="purpose",
+                labels={"distance_km": "Distance (km)", "duration_min": "Duration (min)", "purpose": "Purpose"},
+                title="Duration vs Distance (Filtered)",
+                hover_data=["mode", "employment"],
+            )
+            st.plotly_chart(fig_dur_dist, use_container_width=True)
+        else:
+            st.write("No trip data available to display duration vs distance.")
 
 
 if __name__ == "__main__":

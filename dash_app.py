@@ -1,117 +1,52 @@
 """
-Mobility Dashboard for HHtbilisi2025
-===================================
+Enhanced Mobility Dashboard for HHtbilisi2025
+===========================================
 
-This Dash application provides an interactive environment for exploring
-household travel survey data.  It follows best‑practice design
-recommendations for dashboards to help users discover patterns and
-correlations across a range of trip, person and household variables.
+This Dash application builds on the original mobility dashboard and
+incorporates the full household travel survey dataset.  In addition to
+the existing visualisations (trips by purpose, trips by age, a
+correlation matrix, household metrics, mode distribution and trip
+duration by mode) the dashboard now includes two extra charts:
 
-Features
---------
+* **Trips by Employment Status** – a bar chart showing how trip
+  frequency varies across different employment categories.  This
+  helps reveal whether retirees, students or full‑time workers tend to
+  travel more frequently.
+* **Duration vs Distance Scatter** – a scatter plot comparing the
+  recorded duration of each trip (in minutes) against an estimated
+  distance (km).  Points are coloured by trip purpose so you can
+  identify which types of journeys are typically longer or shorter.
 
-* **Trip Purpose Analysis** – compare the number of trips by purpose and
-  understand how the distribution varies when filtering by age,
-  gender, income or distance.  Users can select one or more trip
-  purposes from a dropdown or click bars to focus on a single
-  category.  A range slider allows filtering on the traveller’s
-  age.
+The application reads its data from ``sample_data_full.csv`` and
+automatically adapts to the number of records it contains.  A
+reduced sample of the original 1 000 records (``sample_data_backup.csv``)
+is also available for reference or recovery.
 
-* **Age Profile** – visualise trips by age group with an overlay of
-  the selected trip purpose(s).  The age slider updates this chart
-  dynamically, and tooltips reveal exact values on hover.
-
-* **Correlation Matrix** – a heatmap shows the correlation between
-  numeric variables (age, income, distance and duration).  This
-  provides a quick overview of the strength and direction of
-  relationships in the data.
-
-* **Household Metrics** – explore how household size, income and car
-  ownership influence travel.  The scatter plot positions each
-  household based on average trips per person and household income,
-  with marker size proportional to household size and colour
-  indicating car ownership category.
-
-* **Mode of Transport** – inspect the share of different modes of
-  transport and the average duration of trips by mode.  These charts
-  respond to the same filters as the purpose and age charts.
-
-Design considerations
----------------------
-
-The layout and interaction patterns used in this application are
-informed by current best practices in dashboard design:
-
-* **Limit filter complexity** – the number of filters is kept to the
-  most relevant variables.  Descriptive labels and helper text guide
-  users, as recommended by the design guidance for interactive
-  dashboards【172438693224181†L420-L427】.
-
-* **Cascading filters and cross‑filtering** – when the user selects a
-  purpose or changes the age range, all charts update coherently.  This
-  cross‑filtering behaviour helps users maintain context when
-  exploring the data【172438693224181†L465-L473】.
-
-* **Responsive layout** – the page uses a flexible row/column
-  arrangement so that charts resize gracefully on different screen
-  sizes【172438693224181†L598-L602】.
-
-* **Performance optimisation** – heavy computations (like the
-  correlation matrix) are performed on filtered data, and data is
-  pre‑aggregated where possible to ensure smooth interactions.  This
-  follows recommendations to pre‑aggregate and limit data points for
-  better performance【172438693224181†L492-L502】.
-
-Usage
------
-
-The application expects a CSV file named ``sample_data.csv`` in the
-same directory.  This file should contain trip‑level records with at
-least the following fields:
-
-* ``trip_id`` – unique identifier for each trip
-* ``person_id`` and ``household_id`` – identifiers for the traveller
-  and household
-* ``age`` – age of the traveller
-* ``sex`` – gender of the traveller
-* ``employment`` – employment status (e.g. Employed, Student)
-* ``purpose`` – trip purpose (e.g. Shopping, Commuting)
-* ``mode`` – transport mode (e.g. Car, Walking)
-* ``distance_km`` – trip length in kilometres
-* ``duration_min`` – trip duration in minutes
-* ``household_income`` – annual household income in local currency
-* ``num_persons`` – number of people in the household
-* ``car_ownership`` – category describing how many cars the household
-  owns (None, One, Two+, Shared)
-
-To run the app locally:
+To run the app locally install the required packages and execute:
 
 .. code-block:: bash
 
-   pip install dash dash-bootstrap-components pandas plotly
-   python dash_app.py
+    pip install dash dash-bootstrap-components pandas plotly
+    python dash_app.py
 
-The server will start on http://127.0.0.1:8050/ by default.  If you
-deploy this to an online environment, adjust the host and port
-arguments accordingly.
+The server will start on http://127.0.0.1:8050/ by default.
 """
 
 import os
 
 import dash
-from dash import dcc, html, Input, Output, callback_context
+from dash import dcc, html, Input, Output, callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 import numpy as np
 import plotly.express as px
-
 
 # -----------------------------------------------------------------------------
 # Data loading and preparation
 # -----------------------------------------------------------------------------
 
 def load_data(path: str) -> pd.DataFrame:
-    """Load trip data from a CSV file.
+    """Load trip data from a CSV file and cast categorical columns.
 
     Parameters
     ----------
@@ -143,8 +78,8 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
     """Aggregate trip data to a household level summary.
 
     The summary computes the total number of trips per household and the
-    average number of trips per person in the household.  It also
-    retains household income, car ownership and number of persons.
+    average number of trips per person in the household.  It also retains
+    household income, car ownership and number of persons.
 
     Parameters
     ----------
@@ -160,7 +95,7 @@ def prepare_household_summary(df: pd.DataFrame) -> pd.DataFrame:
         trips_total=("trip_id", "count"),
         persons=("num_persons", "max"),
         income=("household_income", "max"),
-        car_ownership=("car_ownership", "max"),
+        car_ownership=("car_ownership", "first"),
     ).reset_index()
     grouped["trips_per_person"] = grouped["trips_total"] / grouped["persons"]
     return grouped
@@ -191,8 +126,8 @@ def compute_correlation(df: pd.DataFrame) -> pd.DataFrame:
     return corr
 
 
-# Load the sample dataset
-DATA_PATH = "sample_data.csv"
+# Load the dataset (full survey)
+DATA_PATH = "sample_data_full.csv"
 try:
     data = load_data(DATA_PATH)
 except FileNotFoundError:
@@ -201,7 +136,6 @@ except FileNotFoundError:
     )
 
 household_summary = prepare_household_summary(data)
-
 
 # -----------------------------------------------------------------------------
 # Dash application setup
@@ -241,7 +175,7 @@ def create_layout() -> html.Div:
                     min=int(data["age"].min()),
                     max=int(data["age"].max()),
                     value=[int(data["age"].min()), int(data["age"].max())],
-                    marks={i: str(i) for i in range(0, 81, 10)},
+                    marks={i: str(i) for i in range(0, int(data["age"].max()) + 1, 10)},
                     tooltip={"always_visible": False, "placement": "bottom"},
                 ),
             ], md=4),
@@ -256,18 +190,25 @@ def create_layout() -> html.Div:
                 ),
             ], md=4),
         ], className="mb-4"),
-        # Second row for charts
+        # First row of charts
         dbc.Row([
             dbc.Col(dcc.Graph(id="trips-by-purpose"), md=6),
             dbc.Col(dcc.Graph(id="trips-by-age"), md=6),
         ], className="mb-4"),
+        # Second row of charts
         dbc.Row([
             dbc.Col(dcc.Graph(id="corr-matrix"), md=6),
             dbc.Col(dcc.Graph(id="household-metrics"), md=6),
         ], className="mb-4"),
+        # Third row of charts
         dbc.Row([
             dbc.Col(dcc.Graph(id="mode-distribution"), md=6),
             dbc.Col(dcc.Graph(id="duration-by-mode"), md=6),
+        ], className="mb-4"),
+        # Fourth row: additional charts
+        dbc.Row([
+            dbc.Col(dcc.Graph(id="trips-by-employment"), md=6),
+            dbc.Col(dcc.Graph(id="duration-vs-distance"), md=6),
         ], className="mb-4"),
     ], fluid=True)
 
@@ -276,7 +217,7 @@ app.layout = create_layout()
 
 
 # -----------------------------------------------------------------------------
-# Callbacks to update charts based on filters
+# Callback to update charts based on filters
 # -----------------------------------------------------------------------------
 
 @app.callback(
@@ -286,6 +227,8 @@ app.layout = create_layout()
     Output("household-metrics", "figure"),
     Output("mode-distribution", "figure"),
     Output("duration-by-mode", "figure"),
+    Output("trips-by-employment", "figure"),
+    Output("duration-vs-distance", "figure"),
     Input("purpose-filter", "value"),
     Input("age-slider", "value"),
     Input("sex-filter", "value"),
@@ -362,7 +305,7 @@ def update_charts(selected_purposes, age_range, selected_sexes):
             trips_total=("trip_id", "count"),
             persons=("num_persons", "max"),
             income=("household_income", "max"),
-            car_ownership=("car_ownership", "max"),
+            car_ownership=("car_ownership", "first"),
         ).reset_index()
         hh_filtered["trips_per_person"] = hh_filtered["trips_total"] / hh_filtered["persons"]
         hh_df = hh_filtered
@@ -411,6 +354,35 @@ def update_charts(selected_purposes, age_range, selected_sexes):
     )
     fig_duration_mode.update_layout(showlegend=False)
 
+    # Trips by employment bar chart
+    employment_counts = (
+        df_filtered.groupby("employment")
+        .size()
+        .reset_index(name="count")
+        .sort_values("count", ascending=False)
+    )
+    fig_employment = px.bar(
+        employment_counts,
+        x="employment",
+        y="count",
+        labels={"employment": "Employment status", "count": "Number of trips"},
+        title="Trips by Employment Status",
+        color="employment",
+        color_discrete_sequence=px.colors.qualitative.Set1,
+    )
+    fig_employment.update_layout(showlegend=False, xaxis_tickangle=-45)
+
+    # Duration vs Distance scatter plot
+    fig_dur_dist = px.scatter(
+        df_filtered,
+        x="distance_km",
+        y="duration_min",
+        color="purpose",
+        labels={"distance_km": "Distance (km)", "duration_min": "Duration (min)", "purpose": "Purpose"},
+        title="Duration vs Distance (Filtered)",
+        hover_data=["mode", "employment"],
+    )
+
     return (
         fig_purpose,
         fig_age,
@@ -418,11 +390,12 @@ def update_charts(selected_purposes, age_range, selected_sexes):
         fig_household,
         fig_mode,
         fig_duration_mode,
+        fig_employment,
+        fig_dur_dist,
     )
 
 
 if __name__ == "__main__":
     # Run the Dash app
-        port = int(os.environ.get("PORT", 8050))
+    port = int(os.environ.get("PORT", 8050))
     app.run_server(host="0.0.0.0", port=port, debug=False)
-
